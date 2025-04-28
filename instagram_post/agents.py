@@ -5,11 +5,13 @@ from tools.browser_tools import BrowserTools
 from tools.search_tools import SearchTools
 from langchain.agents import load_tools
 
-from langchain.llms import Ollama
+from langchain.chat_models import ChatOpenAI
 
 class MarketingAnalysisAgents:
 	def __init__(self):
-		self.llm = Ollama(model=os.environ['MODEL'])
+		self.llm = ChatOpenAI(model_name=os.environ.get('MODEL', 'gpt-4.1-mini'))
+		# The tools are already defined with LangChain's @tool decorator, so we can use them directly
+		# No need to wrap them with crewai.tools.tool
 
 	def product_competitor_agent(self):
 		return Agent(

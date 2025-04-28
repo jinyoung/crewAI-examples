@@ -5,10 +5,16 @@ description = ""
 authors = ["Your Name <you@example.com>"]
 
 [tool.poetry.dependencies]
-python = ">=3.10.0,<3.12"
+python = ">=3.11.0"
 python-dotenv = "1.0.0"
-crewai = "^0.76.9"
+crewai = "^0.114.0"
 unstructured = "^0.16.4"
+langchain-community = "^0.3.22"
+langchain-mcp-adapters = "^0.0.1a2"
+langgraph = "^0.2.12"
+langchain-openai = "^0.1.2"
+crewai-tools = {version = "^0.1.0", extras = ["mcp"]}
+mcp = "^0.1.0"
 
 [tool.poetry.scripts]
 landing_page_generator = "landing_page_generator.main:run"

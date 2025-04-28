@@ -11,6 +11,7 @@ By [@joaomdmoura](https://x.com/joaomdmoura)
 - [Details & Explanation](#details--explanation)
 - [Using GPT 3.5](#using-gpt-35)
 - [Using Local Models with Ollama](#using-local-models-with-ollama)
+- [Using MCP Server Tools](#using-mcp-server-tools)
 - [Contributing](#contributing)
 - [Support and Contact](#support-and-contact)
 - [License](#license)
@@ -89,6 +90,67 @@ self.idea_analyst = Agent(
 - **Privacy**: Local models allow processing of data within your own infrastructure, ensuring data privacy.
 - **Customization**: You can customize the model to better suit the specific needs of your tasks.
 - **Performance**: Depending on your setup, local models can offer performance benefits, especially in terms of latency.
+
+## Using MCP Server Tools
+The project now includes support for Machine Context Processing (MCP) servers, which provide specialized functions like math calculations and weather data retrieval.
+
+### Setting Up MCP Server Tools
+- **Install Dependencies**: The necessary dependencies are included in the `pyproject.toml` file. Run `poetry install` to update your environment.
+- **Configure MCP Servers**: The project includes example MCP server implementations in the `examples` directory.
+
+### Using MCP Tools with CrewAI
+You can use the MCP tools with CrewAI agents:
+
+```python
+from landing_page_generator.tools.mcp_tools import MCPServerToolProvider
+
+# Configure your MCP servers
+mcp_server_config = {
+    "math": {
+        "command": "python",
+        "args": ["/path/to/math_server.py"],
+        "transport": "stdio",
+    },
+    "weather": {
+        "url": "http://localhost:8000/sse",
+        "transport": "sse",
+    }
+}
+
+# Create the MCP provider and get individual tools
+mcp_provider = MCPServerToolProvider(server_config=mcp_server_config)
+mcp_tools = mcp_provider.get_tools()
+
+# Add the tools to your agent
+data_analyst = Agent(
+    role="Data Analyst",
+    goal="Provide accurate data and calculations",
+    backstory="You are an expert data analyst with access to specialized computational tools.",
+    verbose=True,
+    tools=mcp_tools  # Pass the list of tools directly
+)
+
+# Don't forget to close the provider when you're done
+# In an async context:
+# await mcp_provider.close()
+```
+
+### Using MCP with LangGraph
+You can also use the MCP tools directly with LangGraph's `create_react_agent`:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4o")
+
+async with MultiServerMCPClient(server_config) as client:
+    agent = create_react_agent(model, client.get_tools())
+    result = await agent.ainvoke({"messages": "what's (3 + 5) x 12?"})
+```
+
+For complete examples, check the `examples/mcp_agent_example.py` and `examples/langgraph_mcp_example.py` files.
 
 ## License
 This project is released under the MIT License.

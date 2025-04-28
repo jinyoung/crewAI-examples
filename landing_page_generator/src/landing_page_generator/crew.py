@@ -1,17 +1,44 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
+from callback import CallbackHandler
 
 from langchain_community.agent_toolkits.file_management.toolkit import FileManagementToolkit
-from tools.browser_tools import BrowserTools
+from tools.browser_tools import ScrapeWebsiteTool
 from tools.file_tools import FileTools
-from tools.search_tools import SearchTools
+from tools.search_tools import SearchInternetTool
 from tools.template_tools import TemplateTools
+# Import the official crewai-tools MCP integration and StdioServerParameters
+from mcp import StdioServerParameters
+from crewai_tools import MCPServerAdapter
+from crewai.tools import BaseTool
+
 import json
 import ast
+import os
 
 from dotenv import load_dotenv
 load_dotenv()
 
+
+# Update MCP server configuration to use StdioServerParameters
+mcp_server_params = StdioServerParameters(
+    command="npx",
+    args=["@playwright/mcp@latest"],
+    env=os.environ
+)
+
+# Create MCP server adapter and get tools
+mcp_server_adapter = MCPServerAdapter(mcp_server_params)
+mcp_tools = mcp_server_adapter.tools
+
+# Helper function to ensure all tools are BaseTool instances
+def ensure_base_tools(tools_list):
+    """Ensure all tools in the list are instances of BaseTool"""
+    result = []
+    for tool in tools_list:
+        if isinstance(tool, BaseTool):
+            result.append(tool)
+    return result
 
 @CrewBase
 class ExpandIdeaCrew:
@@ -21,24 +48,31 @@ class ExpandIdeaCrew:
     
     @agent
     def senior_idea_analyst_agent(self) -> Agent:
+        search_tool = SearchInternetTool()
+        scrape_tool = ScrapeWebsiteTool()
+        # Use list of individual MCP tools instead of a single MCP tool
+        tools = ensure_base_tools(mcp_tools)
         return Agent(
             config=self.agents_config['senior_idea_analyst'],
             allow_delegation=False,
-            tools=[
-            SearchTools.search_internet,
-            BrowserTools.scrape_and_summarize_website],
-            verbose=True
+            tools=tools,
+            verbose=False,
+            step_callback=lambda step_output: print(f"Step output: {step_output}")
+            
         )
     
     @agent
     def senior_strategist_agent(self) -> Agent:
+        search_tool = SearchInternetTool()
+        scrape_tool = ScrapeWebsiteTool()
+        # Use list of individual MCP tools instead of a single MCP tool
+        tools = ensure_base_tools(mcp_tools)
         return Agent(
             config=self.agents_config['senior_strategist'],
             allow_delegation=False,
-            tools=[
-            SearchTools.search_internet,
-            BrowserTools.scrape_and_summarize_website,],
-            verbose=True
+            tools=tools,
+            verbose=False,
+            step_callback=lambda step_output: print(f"Step output: {step_output}")
         )
     
     @task
@@ -77,17 +111,30 @@ class ChooseTemplateCrew:
 
     @agent
     def senior_react_engineer_agent(self) -> Agent:
+        search_tool = SearchInternetTool()
+        scrape_tool = ScrapeWebsiteTool()
+        
+        # Collect all tools
+        all_tools = [
+            # Add individual MCP tools instead of a single MCP tool
+            *mcp_tools,  # Unpacking the list of tools
+            TemplateTools.learn_landing_page_options,
+            TemplateTools.copy_landing_page_template_to_project_folder,
+            FileTools.write_file
+        ]
+        # Add toolkit tools
+        toolkit_tools = self.toolkit.get_tools()
+        all_tools.extend(toolkit_tools)
+        
+        # Ensure all tools are BaseTool instances
+        tools = ensure_base_tools(all_tools)
+
         return Agent(
             config=self.agents_config['senior_react_engineer'],
             allow_delegation=False,
-            tools=[
-          SearchTools.search_internet,
-          BrowserTools.scrape_and_summarize_website,
-          TemplateTools.learn_landing_page_options,
-          TemplateTools.copy_landing_page_template_to_project_folder,
-          FileTools.write_file
-        ] + self.toolkit.get_tools(),
-            verbose=True
+            tools=tools,
+            verbose=False,
+            step_callback=lambda step_output: print(f"Step output: {step_output}")
         )
     
     
@@ -115,6 +162,9 @@ class ChooseTemplateCrew:
         )
     
     
+callback_handler = CallbackHandler()
+
+
 @CrewBase
 class CreateContentCrew:
 
@@ -128,27 +178,42 @@ class CreateContentCrew:
 
     @agent
     def senior_content_editor_agent(self) -> Agent:
+        # Empty list as placeholder since no tools are specified
+        tools = []
         return Agent(
             config=self.agents_config['senior_content_editor'],
             allow_delegation=False,
-            tools=[
-            ],
-            verbose=True
+            tools=tools,
+            verbose=True,
+            step_callback=lambda step_output: print(f"Step output: {step_output}")
         )
     
     @agent
     def senior_react_engineer_agent(self) -> Agent:
+        search_tool = SearchInternetTool()
+        scrape_tool = ScrapeWebsiteTool()
+        
+        # Collect all tools
+        all_tools = [
+            search_tool,
+            scrape_tool,
+            TemplateTools.learn_landing_page_options,
+            TemplateTools.copy_landing_page_template_to_project_folder,
+            FileTools.write_file
+        ]
+        # Add toolkit tools
+        toolkit_tools = self.toolkit.get_tools()
+        all_tools.extend(toolkit_tools)
+        
+        # Ensure all tools are BaseTool instances
+        tools = ensure_base_tools(all_tools)
+        
         return Agent(
             config=self.agents_config['senior_react_engineer'],
             allow_delegation=False,
-            tools=[
-                SearchTools.search_internet,
-                BrowserTools.scrape_and_summarize_website,
-                TemplateTools.learn_landing_page_options,
-                TemplateTools.copy_landing_page_template_to_project_folder,
-                FileTools.write_file
-                ] + self.toolkit.get_tools(),
-            verbose=True
+            tools=tools,
+            verbose=True,
+            step_callback=lambda step_output: print(f"Step output: {step_output}")
         )
     
     @task
@@ -187,11 +252,15 @@ class LandingPageCrew():
         self.idea = idea
     
     def run(self):
-        expanded_idea= self.runExpandIdeaCrew(self.idea)
-            
-        components_paths_list = self.runChooseTemplateCrew(expanded_idea)
-            
-        self.runCreateContentCrew(components_paths_list, expanded_idea)
+        try:
+            expanded_idea= self.runExpandIdeaCrew(self.idea)
+                
+            components_paths_list = self.runChooseTemplateCrew(expanded_idea)
+                
+            self.runCreateContentCrew(components_paths_list, expanded_idea)
+        finally:
+            # Make sure to stop the MCP server adapter when done
+            mcp_server_adapter.stop()
     
     def runExpandIdeaCrew(self,idea):
         inputs1 = {
