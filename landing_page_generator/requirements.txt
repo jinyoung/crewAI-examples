@@ -1,0 +1,9 @@
+python-dotenv
+crewai
+unstructured
+langchain-community
+langchain-mcp-adapters
+langgraph
+langchain-openai
+crewai-tools[mcp]
+mcp
